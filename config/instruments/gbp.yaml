@@ -1,0 +1,42 @@
+# GBP instrument universe. Equities/index/futures are REAL (subscribed live via ib_async) --
+# symbols/exchanges below are best-effort defaults; verify with ib.qualifyContractsAsync() or
+# TWS contract search and correct if IBKR resolves them differently.
+# Swaps are STUB ONLY (see ibkr_dashboard/swaps/adapter.py).
+
+currency: GBP
+
+index:
+  symbol: FTSE
+  exchange: ICEEU
+  display_name: "FTSE 100"
+
+equities:
+  - symbol: SHEL
+    exchange: SMART
+    primary_exchange: LSE
+    display_name: "Shell"
+  - symbol: AZN
+    exchange: SMART
+    primary_exchange: LSE
+    display_name: "AstraZeneca"
+  - symbol: HSBA
+    exchange: SMART
+    primary_exchange: LSE
+    display_name: "HSBC"
+
+rate_proxy_futures:
+  - symbol: SONIA
+    exchange: ICEEU
+    display_name: "SONIA Futures"
+    description: "Front-month SONIA futures, proxy for GBP short-rate expectations"
+
+swaps:
+  - index_basis: SONIA
+    tenor: 2Y
+    leg_description: "Fixed vs SONIA (OIS)"
+  - index_basis: SONIA
+    tenor: 5Y
+    leg_description: "Fixed vs SONIA (OIS)"
+  - index_basis: SONIA
+    tenor: 10Y
+    leg_description: "Fixed vs SONIA (OIS)"

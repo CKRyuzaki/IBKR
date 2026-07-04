@@ -1,0 +1,39 @@
+# JPY instrument universe. Equities/index are REAL (subscribed live via ib_async) --
+# symbols/exchanges below are best-effort defaults; verify with ib.qualifyContractsAsync() or
+# TWS contract search and correct if IBKR resolves them differently.
+# No reliable IBKR-tradeable short-rate futures proxy identified for JPY -- left empty; the
+# swap curve panel is STUB ONLY regardless (see ibkr_dashboard/swaps/adapter.py).
+
+currency: JPY
+
+index:
+  symbol: N225
+  exchange: OSE.JPN
+  display_name: "Nikkei 225"
+
+equities:
+  - symbol: "7203"
+    exchange: SMART
+    primary_exchange: TSEJ
+    display_name: "Toyota"
+  - symbol: "6758"
+    exchange: SMART
+    primary_exchange: TSEJ
+    display_name: "Sony"
+  - symbol: "9984"
+    exchange: SMART
+    primary_exchange: TSEJ
+    display_name: "SoftBank Group"
+
+rate_proxy_futures: []
+
+swaps:
+  - index_basis: TONA
+    tenor: 2Y
+    leg_description: "Fixed vs TONA (OIS)"
+  - index_basis: TONA
+    tenor: 5Y
+    leg_description: "Fixed vs TONA (OIS)"
+  - index_basis: TONA
+    tenor: 10Y
+    leg_description: "Fixed vs TONA (OIS)"

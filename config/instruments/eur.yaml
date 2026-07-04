@@ -1,0 +1,54 @@
+# EUR instrument universe. Equities/index/futures are REAL (subscribed live via ib_async) --
+# symbols/exchanges below are best-effort defaults; verify with ib.qualifyContractsAsync() or
+# TWS contract search and correct if IBKR resolves them differently.
+# Swaps (incl. EURIBOR/ESTR basis) are STUB ONLY (see ibkr_dashboard/swaps/adapter.py).
+
+currency: EUR
+
+index:
+  symbol: ESTX50
+  exchange: EUREX
+  display_name: "Euro Stoxx 50"
+
+equities:
+  - symbol: ASML
+    exchange: SMART
+    primary_exchange: AEB
+    display_name: "ASML"
+  - symbol: SAP
+    exchange: SMART
+    primary_exchange: IBIS
+    display_name: "SAP"
+  - symbol: MC
+    exchange: SMART
+    primary_exchange: SBF
+    display_name: "LVMH"
+
+rate_proxy_futures:
+  - symbol: EURIBOR
+    exchange: ICEEU
+    display_name: "3M Euribor Futures"
+    description: "Front-month Euribor futures, proxy for EUR short-rate expectations"
+
+swaps:
+  - index_basis: ESTR
+    tenor: 2Y
+    leg_description: "Fixed vs ESTR (OIS)"
+  - index_basis: ESTR
+    tenor: 5Y
+    leg_description: "Fixed vs ESTR (OIS)"
+  - index_basis: ESTR
+    tenor: 10Y
+    leg_description: "Fixed vs ESTR (OIS)"
+  - index_basis: EURIBOR3M
+    tenor: 2Y
+    leg_description: "Fixed vs 3M EURIBOR"
+  - index_basis: EURIBOR3M
+    tenor: 5Y
+    leg_description: "Fixed vs 3M EURIBOR"
+  - index_basis: EURIBOR3M
+    tenor: 10Y
+    leg_description: "Fixed vs 3M EURIBOR"
+  - index_basis: EURIBOR3M_ESTR_BASIS
+    tenor: 5Y
+    leg_description: "3M EURIBOR vs ESTR basis swap"

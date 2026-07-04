@@ -1,0 +1,39 @@
+# CHF instrument universe. Equities/index are REAL (subscribed live via ib_async) --
+# symbols/exchanges below are best-effort defaults; verify with ib.qualifyContractsAsync() or
+# TWS contract search and correct if IBKR resolves them differently.
+# No reliable IBKR-tradeable short-rate futures proxy identified for CHF -- left empty; the
+# swap curve panel is STUB ONLY regardless (see ibkr_dashboard/swaps/adapter.py).
+
+currency: CHF
+
+index:
+  symbol: SMI
+  exchange: EBS
+  display_name: "Swiss Market Index"
+
+equities:
+  - symbol: NESN
+    exchange: SMART
+    primary_exchange: EBS
+    display_name: "Nestle"
+  - symbol: NOVN
+    exchange: SMART
+    primary_exchange: EBS
+    display_name: "Novartis"
+  - symbol: ROG
+    exchange: SMART
+    primary_exchange: EBS
+    display_name: "Roche"
+
+rate_proxy_futures: []
+
+swaps:
+  - index_basis: SARON
+    tenor: 2Y
+    leg_description: "Fixed vs SARON (OIS)"
+  - index_basis: SARON
+    tenor: 5Y
+    leg_description: "Fixed vs SARON (OIS)"
+  - index_basis: SARON
+    tenor: 10Y
+    leg_description: "Fixed vs SARON (OIS)"

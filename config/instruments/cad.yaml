@@ -1,0 +1,39 @@
+# CAD instrument universe. Equities/index are REAL (subscribed live via ib_async) --
+# symbols/exchanges below are best-effort defaults; verify with ib.qualifyContractsAsync() or
+# TWS contract search and correct if IBKR resolves them differently.
+# No reliable IBKR-tradeable short-rate futures proxy identified for CAD -- left empty; the
+# swap curve panel is STUB ONLY regardless (see ibkr_dashboard/swaps/adapter.py).
+
+currency: CAD
+
+index:
+  symbol: SPTSX
+  exchange: TSE
+  display_name: "S&P/TSX Composite"
+
+equities:
+  - symbol: RY
+    exchange: SMART
+    primary_exchange: TSE
+    display_name: "Royal Bank of Canada"
+  - symbol: TD
+    exchange: SMART
+    primary_exchange: TSE
+    display_name: "TD Bank"
+  - symbol: ENB
+    exchange: SMART
+    primary_exchange: TSE
+    display_name: "Enbridge"
+
+rate_proxy_futures: []
+
+swaps:
+  - index_basis: CORRA
+    tenor: 2Y
+    leg_description: "Fixed vs CORRA (OIS)"
+  - index_basis: CORRA
+    tenor: 5Y
+    leg_description: "Fixed vs CORRA (OIS)"
+  - index_basis: CORRA
+    tenor: 10Y
+    leg_description: "Fixed vs CORRA (OIS)"

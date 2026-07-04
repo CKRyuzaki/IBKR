@@ -1,0 +1,39 @@
+# AUD instrument universe. Equities/index are REAL (subscribed live via ib_async) --
+# symbols/exchanges below are best-effort defaults; verify with ib.qualifyContractsAsync() or
+# TWS contract search and correct if IBKR resolves them differently.
+# No reliable IBKR-tradeable short-rate futures proxy identified for AUD -- left empty; the
+# swap curve panel is STUB ONLY regardless (see ibkr_dashboard/swaps/adapter.py).
+
+currency: AUD
+
+index:
+  symbol: AS51
+  exchange: ASX
+  display_name: "ASX 200"
+
+equities:
+  - symbol: BHP
+    exchange: SMART
+    primary_exchange: ASX
+    display_name: "BHP Group"
+  - symbol: CBA
+    exchange: SMART
+    primary_exchange: ASX
+    display_name: "Commonwealth Bank"
+  - symbol: CSL
+    exchange: SMART
+    primary_exchange: ASX
+    display_name: "CSL"
+
+rate_proxy_futures: []
+
+swaps:
+  - index_basis: AONIA
+    tenor: 2Y
+    leg_description: "Fixed vs AONIA (OIS)"
+  - index_basis: AONIA
+    tenor: 5Y
+    leg_description: "Fixed vs AONIA (OIS)"
+  - index_basis: AONIA
+    tenor: 10Y
+    leg_description: "Fixed vs AONIA (OIS)"

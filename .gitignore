@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+
+# Local secrets/config
+.env
+config/config.yaml
+
+# Local data
+data/*.db
+data/*.db-journal
+data/*.db-wal
+data/*.db-shm
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log

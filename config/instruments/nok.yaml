@@ -1,0 +1,39 @@
+# NOK instrument universe. Equities/index are REAL (subscribed live via ib_async) --
+# symbols/exchanges below are best-effort defaults; verify with ib.qualifyContractsAsync() or
+# TWS contract search and correct if IBKR resolves them differently.
+# No short-rate futures proxy identified for NOK -- left empty; the swap curve panel is
+# STUB ONLY regardless (see ibkr_dashboard/swaps/adapter.py).
+
+currency: NOK
+
+index:
+  symbol: OBX
+  exchange: OSE.NOR
+  display_name: "OBX Index"
+
+equities:
+  - symbol: EQNR
+    exchange: SMART
+    primary_exchange: OSE.NOR
+    display_name: "Equinor"
+  - symbol: DNB
+    exchange: SMART
+    primary_exchange: OSE.NOR
+    display_name: "DNB Bank"
+  - symbol: TEL
+    exchange: SMART
+    primary_exchange: OSE.NOR
+    display_name: "Telenor"
+
+rate_proxy_futures: []
+
+swaps:
+  - index_basis: NOWA
+    tenor: 2Y
+    leg_description: "Fixed vs NOWA (OIS)"
+  - index_basis: NOWA
+    tenor: 5Y
+    leg_description: "Fixed vs NOWA (OIS)"
+  - index_basis: NOWA
+    tenor: 10Y
+    leg_description: "Fixed vs NOWA (OIS)"

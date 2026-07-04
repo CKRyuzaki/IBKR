@@ -1,0 +1,42 @@
+# USD instrument universe. Equities/index/futures are REAL (subscribed live via ib_async) --
+# symbols/exchanges below are best-effort defaults; verify with ib.qualifyContractsAsync() or
+# TWS contract search and correct if IBKR resolves them differently.
+# Swaps are STUB ONLY (see ibkr_dashboard/swaps/adapter.py) -- no live data yet.
+
+currency: USD
+
+index:
+  symbol: SPX
+  exchange: CBOE
+  display_name: "S&P 500"
+
+equities:
+  - symbol: AAPL
+    exchange: SMART
+    primary_exchange: NASDAQ
+    display_name: "Apple"
+  - symbol: MSFT
+    exchange: SMART
+    primary_exchange: NASDAQ
+    display_name: "Microsoft"
+  - symbol: NVDA
+    exchange: SMART
+    primary_exchange: NASDAQ
+    display_name: "NVIDIA"
+
+rate_proxy_futures:
+  - symbol: SR3
+    exchange: CME
+    display_name: "SOFR 3M Futures"
+    description: "Front-month SOFR futures, proxy for USD short-rate expectations"
+
+swaps:
+  - index_basis: SOFR_OIS
+    tenor: 2Y
+    leg_description: "Fixed vs SOFR (OIS)"
+  - index_basis: SOFR_OIS
+    tenor: 5Y
+    leg_description: "Fixed vs SOFR (OIS)"
+  - index_basis: SOFR_OIS
+    tenor: 10Y
+    leg_description: "Fixed vs SOFR (OIS)"

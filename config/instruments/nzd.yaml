@@ -1,0 +1,37 @@
+# NZD instrument universe. Equities/index are REAL (subscribed live via ib_async) --
+# symbols/exchanges below are best-effort defaults; verify with ib.qualifyContractsAsync() or
+# TWS contract search and correct if IBKR resolves them differently. NZX-listed names may have
+# limited/no IBKR market data entitlement -- treat this file as the one most likely to need
+# manual correction in Phase E.
+# No short-rate futures proxy identified for NZD -- left empty; the swap curve panel is
+# STUB ONLY regardless (see ibkr_dashboard/swaps/adapter.py).
+
+currency: NZD
+
+index:
+  symbol: NZ50
+  exchange: NZSE
+  display_name: "NZX 50"
+
+equities:
+  - symbol: FPH
+    exchange: SMART
+    primary_exchange: NZSE
+    display_name: "Fisher & Paykel Healthcare"
+  - symbol: ATM
+    exchange: SMART
+    primary_exchange: NZSE
+    display_name: "a2 Milk Company"
+
+rate_proxy_futures: []
+
+swaps:
+  - index_basis: NZ_OCR_OIS
+    tenor: 2Y
+    leg_description: "Fixed vs NZ OCR (OIS)"
+  - index_basis: NZ_OCR_OIS
+    tenor: 5Y
+    leg_description: "Fixed vs NZ OCR (OIS)"
+  - index_basis: NZ_OCR_OIS
+    tenor: 10Y
+    leg_description: "Fixed vs NZ OCR (OIS)"

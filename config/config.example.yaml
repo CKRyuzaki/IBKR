@@ -1,0 +1,30 @@
+# Copy this file to config.yaml and edit for your local setup.
+# config.yaml is gitignored -- never commit real account IDs or hosts other than localhost.
+
+ibkr:
+  mode: paper                 # paper | live -- drives which port below is used
+  host: 127.0.0.1
+  paper_port: 4002             # IB Gateway paper trading (use 7497 if connecting to TWS Desktop paper instead)
+  live_port: 4001               # IB Gateway live trading (use 7496 for TWS Desktop live)
+  client_id: 11                 # arbitrary integer, must be unique among simultaneously connected API clients
+  account_id: ""                 # optional, e.g. "DU1234567" for paper -- used only for display/labeling
+  readonly_api: true             # this dashboard only reads data (quotes/positions/account values),
+                                  # never places orders -- read-only only blocks order entry, not data
+                                  # reads, so true is the safer default and matches Gateway's own
+                                  # "Read-Only API" checkbox when it's checked
+  reconnect_delay_seconds: 5
+  timeout_seconds: 10
+
+storage:
+  sqlite_path: "data/market_data.db"
+  bar_backfill_days:
+    intraday_1min: 2
+    daily: 365
+
+dashboard:
+  host: 127.0.0.1
+  port: 8500
+  update_throttle_ms: 250        # minimum ms between live chart patches per instrument
+
+currencies: [USD, EUR, GBP, JPY, CHF, CAD, AUD, NZD, SEK, NOK]
+instruments_dir: "config/instruments"

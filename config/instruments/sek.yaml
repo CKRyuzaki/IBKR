@@ -1,0 +1,39 @@
+# SEK instrument universe. Equities/index are REAL (subscribed live via ib_async) --
+# symbols/exchanges below are best-effort defaults; verify with ib.qualifyContractsAsync() or
+# TWS contract search and correct if IBKR resolves them differently.
+# No short-rate futures proxy identified for SEK -- left empty; the swap curve panel is
+# STUB ONLY regardless (see ibkr_dashboard/swaps/adapter.py).
+
+currency: SEK
+
+index:
+  symbol: OMXS30
+  exchange: OMS
+  display_name: "OMX Stockholm 30"
+
+equities:
+  - symbol: "ERIC-B"
+    exchange: SMART
+    primary_exchange: SFB
+    display_name: "Ericsson B"
+  - symbol: "VOLV-B"
+    exchange: SMART
+    primary_exchange: SFB
+    display_name: "Volvo B"
+  - symbol: "ATCO-A"
+    exchange: SMART
+    primary_exchange: SFB
+    display_name: "Atlas Copco A"
+
+rate_proxy_futures: []
+
+swaps:
+  - index_basis: SEK_STINA_OIS
+    tenor: 2Y
+    leg_description: "Fixed vs SEK STINA (OIS)"
+  - index_basis: SEK_STINA_OIS
+    tenor: 5Y
+    leg_description: "Fixed vs SEK STINA (OIS)"
+  - index_basis: SEK_STINA_OIS
+    tenor: 10Y
+    leg_description: "Fixed vs SEK STINA (OIS)"
