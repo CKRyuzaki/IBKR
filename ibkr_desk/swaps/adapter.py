@@ -9,7 +9,7 @@ than the standard TWS/IB Gateway socket API that the rest of this project uses v
 Do NOT invent contract fields here. Once you have the exact spec (from IBKR support, TWS
 "contract info" on a real swap instrument, or a reqContractDetails() dump), implement a
 RealSwapAdapter below satisfying the same SwapMarketDataAdapter protocol, and flip the single
-line in ibkr_dashboard/app.py that constructs the adapter. Nothing else in the pipeline
+line in ibkr_desk/dashboard/app.py that constructs the adapter. Nothing else in the pipeline
 (storage, pub/sub, dashboard) needs to change.
 """
 
@@ -18,7 +18,7 @@ from __future__ import annotations
 import logging
 from typing import Protocol
 
-from ibkr_dashboard.swaps.models import RatesSwapInstrument
+from ibkr_desk.swaps.models import RatesSwapInstrument
 
 logger = logging.getLogger(__name__)
 

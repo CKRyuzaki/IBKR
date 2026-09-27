@@ -1,7 +1,7 @@
 """Loads per-currency instrument universe YAML files and builds ib_async Contract objects.
 
 Equities/indices/futures are "real" -- built into genuine ib_async Contract objects that get
-qualified and subscribed against IBKR. Swap entries are data-only (see ibkr_dashboard.swaps) and
+qualified and subscribed against IBKR. Swap entries are data-only (see ibkr_desk.swaps) and
 never turn into an ib_async Contract here, since we don't have a verified IBKR contract spec for
 OTC swaps yet.
 """
@@ -11,10 +11,11 @@ from __future__ import annotations
 from pathlib import Path
 
 import yaml
-from ib_async import Contract, Future, Index, Stock
+from ib_async import Contract
 from pydantic import BaseModel
 
-from ibkr_dashboard.data.models import AssetClass, Instrument
+from ibkr_desk.core.ib import contracts as ibc
+from ibkr_desk.core.models import AssetClass, Instrument
 
 
 class EquityEntry(BaseModel):
@@ -71,17 +72,17 @@ def future_instrument_id(currency: str, symbol: str) -> str:
 
 
 def build_contract_for_equity(entry: EquityEntry, currency: str) -> Contract:
-    return Stock(entry.symbol, entry.exchange, currency, primaryExchange=entry.primary_exchange)
+    return ibc.stock(entry.symbol, entry.exchange, currency, entry.primary_exchange)
 
 
 def build_contract_for_index(entry: IndexEntry, currency: str) -> Contract:
-    return Index(entry.symbol, entry.exchange, currency)
+    return ibc.index(entry.symbol, entry.exchange, currency)
 
 
 def build_contract_for_future(entry: FutureEntry, currency: str) -> Contract:
     # Front-month continuous resolution is left to qualifyContracts()/reqContractDetails()
     # picking the nearest expiry when no explicit lastTradeDateOrContractMonth is given.
-    return Future(entry.symbol, exchange=entry.exchange, currency=currency)
+    return ibc.future(entry.symbol, entry.exchange, currency)
 
 
 def instruments_for_universe(universe: CurrencyUniverse) -> list[Instrument]:
@@ -114,4 +115,17 @@ def instruments_for_universe(universe: CurrencyUniverse) -> list[Instrument]:
                 display_name=fut.display_name or fut.symbol,
             )
         )
+    return out
+
+
+def contracts_for_universe(universe: CurrencyUniverse) -> list[tuple[Contract, str]]:
+    """(unqualified contract, instrument_id) for every real instrument in the universe."""
+    ccy = universe.currency
+    out: list[tuple[Contract, str]] = []
+    if universe.index:
+        out.append((build_contract_for_index(universe.index, ccy), index_instrument_id(ccy, universe.index.symbol)))
+    for eq in universe.equities:
+        out.append((build_contract_for_equity(eq, ccy), equity_instrument_id(ccy, eq.symbol)))
+    for fut in universe.rate_proxy_futures:
+        out.append((build_contract_for_future(fut, ccy), future_instrument_id(ccy, fut.symbol)))
     return out
