@@ -1,6 +1,6 @@
 """Phase A verification: connect to IB Gateway/TWS (paper by default) and print account summary.
 
-Usage: poetry run python scripts/smoke_test_connection.py
+Usage: uv run python scripts/smoke_test_connection.py
 """
 
 from __future__ import annotations
@@ -8,8 +8,8 @@ from __future__ import annotations
 import logging
 import sys
 
-from ibkr_dashboard.connection.ib_client import IBConnectionManager
-from ibkr_dashboard.settings import load_settings
+from ibkr_desk.core.ib.connection import IBConnectionManager
+from ibkr_desk.settings import load_settings
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
