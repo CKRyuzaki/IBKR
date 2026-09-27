@@ -1,4 +1,4 @@
-from ibkr_dashboard.data.pubsub import Broker
+from ibkr_desk.core.pubsub import Broker
 
 
 def test_publish_delivers_to_subscriber():

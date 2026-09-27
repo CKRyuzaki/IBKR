@@ -29,6 +29,17 @@ class Broker:
         self._lock = threading.Lock()
         self._subscribers: dict[str, list[queue.Queue]] = defaultdict(list)
         self._async_subscribers: dict[str, list[tuple[asyncio.AbstractEventLoop, asyncio.Queue]]] = defaultdict(list)
+        self._taps: list[tuple[str, Any]] = []
+
+    def tap(self, prefix: str, fn) -> None:
+        """Call fn(topic, payload) for every publish whose topic starts with `prefix`.
+
+        Runs synchronously on the publisher's thread (the IBKR I/O thread), so `fn` must be fast and
+        must not block -- e.g. update an in-memory dict. Exceptions in fn are swallowed so a buggy
+        tap can never break market data ingestion.
+        """
+        with self._lock:
+            self._taps.append((prefix, fn))
 
     def subscribe(self, topic: str) -> queue.Queue:
         q: queue.Queue = queue.Queue(maxsize=self._max_queue_size)
@@ -52,12 +63,18 @@ class Broker:
         with self._lock:
             subs = self._async_subscribers.get(topic)
             if subs:
-                self._async_subscribers[topic] = [(l, qq) for (l, qq) in subs if qq is not q]
+                self._async_subscribers[topic] = [(lp, qq) for (lp, qq) in subs if qq is not q]
 
     def publish(self, topic: str, payload: Any) -> None:
         with self._lock:
             subs = list(self._subscribers.get(topic, ()))
             async_subs = list(self._async_subscribers.get(topic, ()))
+            taps = [fn for prefix, fn in self._taps if topic.startswith(prefix)]
+        for fn in taps:
+            try:
+                fn(topic, payload)
+            except Exception:  # noqa: BLE001 -- never let a tap break the publisher
+                pass
         for q in subs:
             try:
                 q.put_nowait(payload)
