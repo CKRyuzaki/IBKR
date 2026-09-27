@@ -2,7 +2,7 @@ from pathlib import Path
 
 from ib_async import Index, Stock
 
-from ibkr_dashboard.connection.contracts import (
+from ibkr_desk.universe import (
     build_contract_for_equity,
     build_contract_for_index,
     equity_instrument_id,

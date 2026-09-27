@@ -1,5 +1,5 @@
-from ibkr_dashboard.swaps.adapter import StubSwapAdapter
-from ibkr_dashboard.swaps.models import RatesSwapInstrument
+from ibkr_desk.swaps.adapter import StubSwapAdapter
+from ibkr_desk.swaps.models import RatesSwapInstrument
 
 
 def test_stub_adapter_always_returns_no_data():

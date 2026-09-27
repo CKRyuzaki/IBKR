@@ -1,87 +1,111 @@
-# IBKR G10 RV Desk Dashboard
+# IBKR Desk
 
-Live-ticking market data, portfolio monitoring, and Bloomberg-GP-style price charts for a G10
-rates/equity relative-value desk, built on top of Interactive Brokers. **Paper trading account
-by default.**
+One repo for everything that talks to Interactive Brokers and the data around it:
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for the full component-by-component writeup and data
-flow diagram. In short:
+| Piece | What it does | Run |
+|---|---|---|
+| **Dashboard** | Dark Bloomberg-style Dash app: live quotes, charts, portfolio, Postgres data health, connection status. **Read-only.** | `uv run dashboard` |
+| **Market-data archive** | Daily snapshot of IBKR futures + equities and free public rates (Treasury curve, SOFR, EFFR, FRED breakevens/TIPS/credit/VIX) into Postgres, with an append-only CSV backup. | `uv run archive-daily` |
+| **Rates RV strategy** | DV01-neutral Treasury-futures butterflies: backtest and paper trader. | `uv run rv-backtest`, `uv run rv-trade` |
 
-- **UI**: Dash (Plotly), pushed via a background WebSocket bridge + `dash.Patch()` partial
-  updates -- not full-page reruns like Streamlit, not raw polling.
-- **IBKR access**: [`ib_async`](https://github.com/ib-api-reloaded/ib_async), the maintained
-  fork of `ib_insync`.
-- **Storage**: local SQLite for tick/bar history (survives restarts, powers longer lookback
-  charts).
-- **Swaps/IRS**: currently a **stub only** -- see "Known limitation" below.
+Paper account by default; every client refuses a live account unless `ibkr.allow_live: true`.
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the design.
 
-## 1. Install Python deps
+## Layout
 
-Requires Python 3.12 and [uv](https://docs.astral.sh/uv/).
+```
+ibkr_desk/
+  core/            shared by everything
+    config.py        IBKR / Postgres / futures-spec config models, ClientRole
+    providers.py     provider-agnostic connection status registry
+    pubsub.py        in-process topic broker (with taps)
+    models.py, time_utils.py
+    ib/
+      connection.py  THE place an IBKR connection is made: paper guard, client ids, reconnect + hooks
+      contracts.py   stock/index/future factories + qualify
+      history.py     paced historical-bar client (one pacer for every caller)
+      execution.py   positions, P&L, marketable-limit orders
+  storage/         sqlite.py (dashboard cache) | postgres.py (schemas, upserts) | csv_archive.py
+  marketdata/      futures.py, equities.py, public_rates.py, backfill.py, jobs.py (daily snapshot)
+  live/            market_data.py, portfolio_feed.py, quote_book.py  (streaming services)
+  strategies/rates_rv/   config, signals, data, backtest, risk, trader
+  dashboard/       app.py, server.py, ws_server.py, pages/, callbacks/, components/, theme.py
+  universe.py, swaps/    G10 instrument universe and the swap-data stub
+config/            config.example.yaml, instruments/*.yaml
+scripts/           run_daily.bat, smoke_test_connection.py, backfill_once.py
+tests/
+data/              market_data.db (dashboard), archive/ (CSV backup)  -- gitignored
+```
+
+## Setup
+
+Requires Python 3.12, [uv](https://docs.astral.sh/uv/), IB Gateway, and (for the archive/DATA tab) PostgreSQL.
 
 ```powershell
 uv sync
+copy config\config.example.yaml config\config.yaml     # edit ports / account if needed
+copy .env.example .env                                  # then add the Postgres settings below
 ```
 
-## 2. Install & configure IB Gateway (paper account)
+`.env` (gitignored) holds secrets. IBKR has no API key: you authenticate by logging into Gateway.
+```
+PGHOST=127.0.0.1
+PGPORT=5432
+PGUSER=postgres
+PGPASSWORD=...
+PGDATABASE=marketdata
+```
 
-We recommend **IB Gateway** over full TWS Desktop for this use case -- it's lighter weight and
-better suited to a long-running background data connection.
+### IB Gateway
+1. Log in with your **paper** credentials. Gateway's top bar should show an account starting `DU`.
+2. *Configure -> Settings -> API*: port 4002 (paper). Leave **Read-Only API unchecked** only if you will run `rv-trade --send`; the dashboard and archive work with it checked.
+3. Keep Gateway running. Each client uses its own client id (base `ibkr.client_id` + role offset: dashboard 11, trader 12, archive 13, research 14, adhoc 15) so they can all connect at once.
 
-1. Download and install IB Gateway from IBKR's website.
-2. Log in with your **paper trading** credentials.
-3. In IB Gateway: **Configure -> Settings -> API -> Settings**:
-   - Confirm the socket port matches `config.yaml` (`4002` for paper by default)
-   - "Read-Only API" can stay **checked** -- this dashboard only reads market data,
-     positions, and account values; it never submits/modifies/cancels orders. Read-Only
-     only blocks order entry, not data reads, so leaving it on is actually the safer default.
-   - Add `127.0.0.1` to "Trusted IP Addresses" if that field is present and empty (some
-     Gateway versions auto-trust localhost connections and won't show this requirement)
-   - Note: IB Gateway (unlike full TWS Desktop) doesn't show an "Enable ActiveX and Socket
-     Clients" checkbox -- the API is always on since that's Gateway's whole purpose.
-4. Keep IB Gateway running while the dashboard is running.
-
-## 3. Configure the app
+## Dashboard
 
 ```powershell
-copy config\config.example.yaml config\config.yaml
+uv run dashboard          # http://127.0.0.1:8500
 ```
 
-Edit `config/config.yaml` for your setup (host/port/clientId/account id). `config.yaml` is
-gitignored -- never commit real account details.
+| Tab | What you see |
+|---|---|
+| LIVE | Blotter of every subscribed instrument: bid / ask / last / spread / direction / age of last tick, plus a tick chart of the selected row. Banner says if the feed is down or silent. |
+| CHARTS | GP-style price chart per G10 currency. |
+| PORTFOLIO | Positions and account summary. |
+| DATA | Snapshot health: per-dataset freshness (OK / WARN / STALE), the daily-job log (failures in red), and an explorer showing any Postgres dataset as **plot and table**. |
+| STATUS | One card per provider (IBKR, Postgres, ...): state, endpoint, time in state, last data. The header always shows the same chips. |
 
-IBKR's TWS API has **no API key/secret** -- authentication happens when you log into TWS/IB
-Gateway itself. `.env.example` (copy to `.env`) is only for optional cosmetic overrides.
+The dashboard starts even when Gateway is down; subscriptions re-establish automatically after every reconnect.
+To monitor another data source, register any object with a `name` and `status()` in `ibkr_desk.core.providers.registry`.
 
-## 4. Run
+## Daily snapshot
 
 ```powershell
-uv run dashboard
+uv run archive-daily      # IBKR futures + equities -> data/archive/*.csv -> Postgres, plus rates
+```
+A step that returns less than requested (e.g. a symbol IBKR rejects) is recorded as a **failure** in `ops.snapshot_run`, shown on the DATA tab, and gives a non-zero exit code.
+
+Scheduled on Windows as `ibkr_desk_daily_archive` (weekdays 23:30 local, after CME settlement) via `scripts\run_daily.bat`; output in `logs\daily.log`. Requires Gateway logged in on the paper account at that time.
+
+Recreate the task with:
+```powershell
+schtasks /Create /TN ibkr_desk_daily_archive /TR "<repo>\scripts\run_daily.bat" /SC WEEKLY /D MON,TUE,WED,THU,FRI /ST 23:30
 ```
 
-Then open `http://127.0.0.1:8500`.
+## Rates RV strategy
 
-## Verifying each build phase
+```powershell
+uv run rv-backtest --synthetic                 # smoke test, no data needed (results meaningless)
+uv run rv-backtest --years 8 --walkforward     # real data from data/archive (needs history)
+uv run rv-trade                                # dry run: prints targets and the orders it WOULD send
+uv run rv-trade --send                         # sends orders to the PAPER account
+```
+Safety: paper guard on connect; orders only with `--send`; per-leg and DV01 caps; daily-loss flatten; create a file named `KILL` in the repo root to flatten and halt. `futures.*.dv01` in config are approximations -- refresh them before trusting sizing.
+IBKR serves only ~1 year of expired futures, so a multi-year walk-forward needs older data added to `data/archive/futures/`.
 
-- **Connection**: `uv run python scripts/smoke_test_connection.py` -- connects to your
-  paper Gateway and prints account summary.
-- **Historical backfill**: `uv run python scripts/backfill_once.py USD` -- backfills bars
-  for one currency's instrument universe.
-- **Tests**: `uv run pytest`
+## Development
 
-## Known limitation: swap/IRS data is a stub
-
-IBKR's public TWS API documentation does not describe a contract spec (secType/fields) for OTC
-interest-rate-swap quotes via `reqMktData`. This is very likely an institutional-only
-entitlement and may require FIX CTCI rather than the standard TWS/IB Gateway socket API this
-project uses. The swap curve panel on every currency tab is a clearly-labeled placeholder
-(`ibkr_dashboard/swaps/adapter.py`) until the real IBKR contract spec is confirmed and wired in.
-Equities, indices, and futures (used as short-rate proxies) are real, live data via `ib_async`.
-
-## Instrument universe
-
-Per-currency instrument lists live in `config/instruments/<ccy>.yaml` (G10: USD, EUR, GBP, JPY,
-CHF, CAD, AUD, NZD, SEK, NOK). Symbols/exchanges are best-effort defaults -- some (especially
-JPY/NZD/SEK/NOK names) may need correcting once you can run `ib.qualifyContractsAsync()`
-against a live connection. Edit these files freely; no code changes needed to adjust the
-universe.
+```powershell
+uv run pytest
+uv run ruff check .
+```

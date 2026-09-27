@@ -1,22 +1,28 @@
 # Copy this file to config.yaml and edit for your local setup.
 # config.yaml is gitignored -- never commit real account IDs or hosts other than localhost.
+# Secrets (Postgres password) live in .env (PGHOST/PGPORT/PGUSER/PGPASSWORD/PGDATABASE), never here.
 
 ibkr:
   mode: paper                 # paper | live -- drives which port below is used
   host: 127.0.0.1
   paper_port: 4002             # IB Gateway paper trading (use 7497 if connecting to TWS Desktop paper instead)
   live_port: 4001               # IB Gateway live trading (use 7496 for TWS Desktop live)
-  client_id: 11                 # arbitrary integer, must be unique among simultaneously connected API clients
+  client_id: 11                 # BASE id. Each role adds an offset (ibkr_desk.core.config.ClientRole):
+                                #   dashboard=11, trader=12, archive=13, research=14, adhoc=15
+                                # so simultaneous clients on one Gateway can never collide.
   account_id: ""                 # optional, e.g. "DU1234567" for paper -- used only for display/labeling
-  readonly_api: true             # this dashboard only reads data (quotes/positions/account values),
-                                  # never places orders -- read-only only blocks order entry, not data
-                                  # reads, so true is the safer default and matches Gateway's own
-                                  # "Read-Only API" checkbox when it's checked
+  readonly_api: true             # applies to every role EXCEPT the trader, which must place orders.
+                                  # Matches Gateway's "Read-Only API" checkbox: leave that UNCHECKED if you
+                                  # run `rv-trade --send`, since Gateway-level read-only blocks orders.
+  allow_live: false              # safety: every client refuses to run against a non-paper (non "DU...")
+                                  # account unless this is true. Turn on deliberately, never by accident.
+  market_data_type: 1            # 1 live | 2 frozen | 3 delayed | 4 delayed-frozen (use 3 without a CME subscription)
+  historical_request_interval_s: 1.5   # spacing between reqHistoricalData calls (IBKR pacing limits)
   reconnect_delay_seconds: 5
   timeout_seconds: 10
 
 storage:
-  sqlite_path: "data/market_data.db"
+  sqlite_path: "data/market_data.db"   # dashboard tick/bar cache
   bar_backfill_days:
     intraday_1min: 2
     daily: 365
@@ -25,6 +31,53 @@ dashboard:
   host: 127.0.0.1
   port: 8500
   update_throttle_ms: 250        # minimum ms between live chart patches per instrument
+  default_tab: live              # live | charts | portfolio | data | status
 
 currencies: [USD, EUR, GBP, JPY, CHF, CAD, AUD, NZD, SEK, NOK]
 instruments_dir: "config/instruments"
+data_dir: "data"                 # CSV archive lands in data/archive/{futures,equities}/
+
+# ---- Rates / futures desk (all optional: these are the built-in defaults) -------------------------
+# Futures products archived daily and used by the rates RV strategy. dv01 = approximate $/bp per
+# contract (CTD-based): refresh it from CME / your risk system.
+futures:
+  ZT: {exchange: CBOT, multiplier: 2000, dv01: 38.0,  tick: 0.00390625, tick_value: 7.8125}
+  ZF: {exchange: CBOT, multiplier: 1000, dv01: 45.0,  tick: 0.0078125,  tick_value: 7.8125}
+  ZN: {exchange: CBOT, multiplier: 1000, dv01: 63.0,  tick: 0.015625,   tick_value: 15.625}
+  TN: {exchange: CBOT, multiplier: 1000, dv01: 75.0,  tick: 0.015625,   tick_value: 15.625}
+  ZB: {exchange: CBOT, multiplier: 1000, dv01: 155.0, tick: 0.03125,    tick_value: 31.25}
+
+equities:                        # daily bars archived from IBKR (SMART-routed)
+  symbols: [SPY, QQQ, IWM, SHY, IEF, TLT, TIP, AGG, LQD, HYG]
+  exchange: SMART
+  duration: "10 Y"
+
+rates_rv:                        # Treasury-futures curve butterflies: `rv-backtest`, `rv-trade`
+  flies:
+    - {name: 2s5s10s,  short_wing: ZT, belly: ZF, long_wing: ZN}
+    - {name: 5s10s30s, short_wing: ZF, belly: ZN, long_wing: ZB}
+  strategy:
+    z_window: 60
+    entry_z: 2.0
+    exit_z: 0.5
+    stop_z: 4.0
+    max_hold_days: 30
+    vol_window: 60
+    target_daily_vol: 1500       # USD daily vol target per fly
+    max_belly_dv01: 5000
+    exec_lag: 1                  # backtest: trade one extra day after the signal close
+  costs:
+    commission_per_contract: 0.85
+    slippage_ticks: 0.5
+  roll:
+    days_before_month_start: 10  # roll ~10 days before the contract month (before first notice)
+  risk:
+    max_contracts_per_leg: 50
+    max_total_abs_dv01: 15000
+    max_daily_loss: 3000         # USD; breach => flatten and stop
+    kill_file: KILL              # create this file in the repo root to flatten everything and halt
+  live:
+    lookback_years: 3
+    order_timeout_s: 60
+    interval_min: 15
+    log_dir: logs
