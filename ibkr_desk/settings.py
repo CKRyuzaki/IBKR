@@ -1,35 +1,31 @@
-"""Typed config loader: config/config.yaml (or config.example.yaml as a fallback) + .env."""
+"""Typed config loader: config/config.yaml (or config.example.yaml as a fallback) + .env.
+
+This is the composition root: every sub-config lives next to the code that uses it
+(core/config.py, strategies/*/config.py) and is assembled into one `Settings` here.
+"""
 
 from __future__ import annotations
 
 import warnings
 from pathlib import Path
-from typing import Literal
 
 import yaml
 from dotenv import load_dotenv
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from ibkr_desk.core.config import (
+    DEFAULT_TREASURY_FUTURES,
+    EquityArchiveConfig,
+    FutureSpec,
+    IBKRConfig,
+    PostgresConfig,
+)
+from ibkr_desk.strategies.rates_rv.config import RatesRVConfig
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_CONFIG_PATH = REPO_ROOT / "config" / "config.yaml"
 EXAMPLE_CONFIG_PATH = REPO_ROOT / "config" / "config.example.yaml"
-
-
-class IBKRConfig(BaseSettings):
-    mode: Literal["paper", "live"] = "paper"
-    host: str = "127.0.0.1"
-    paper_port: int = 4002
-    live_port: int = 4001
-    client_id: int = 11
-    account_id: str = ""
-    readonly_api: bool = True
-    reconnect_delay_seconds: int = 5
-    timeout_seconds: int = 10
-
-    @property
-    def port(self) -> int:
-        return self.paper_port if self.mode == "paper" else self.live_port
 
 
 class BarBackfillDays(BaseSettings):
@@ -46,6 +42,7 @@ class DashboardConfig(BaseSettings):
     host: str = "127.0.0.1"
     port: int = 8500
     update_throttle_ms: int = 250
+    default_tab: str = "live"  # live | charts | portfolio | data | status
 
 
 class Settings(BaseSettings):
@@ -59,20 +56,43 @@ class Settings(BaseSettings):
     ibkr: IBKRConfig = Field(default_factory=IBKRConfig)
     storage: StorageConfig = Field(default_factory=StorageConfig)
     dashboard: DashboardConfig = Field(default_factory=DashboardConfig)
+    postgres: PostgresConfig = Field(default_factory=PostgresConfig)
     currencies: list[str] = Field(
         default_factory=lambda: ["USD", "EUR", "GBP", "JPY", "CHF", "CAD", "AUD", "NZD", "SEK", "NOK"]
     )
     instruments_dir: str = "config/instruments"
+    data_dir: str = "data"
+
+    # Rates / futures desk
+    futures: dict[str, FutureSpec] = Field(default_factory=lambda: dict(DEFAULT_TREASURY_FUTURES))
+    equities: EquityArchiveConfig = Field(default_factory=EquityArchiveConfig)
+    rates_rv: RatesRVConfig = Field(default_factory=RatesRVConfig)
 
     @property
     def sqlite_path(self) -> Path:
-        p = Path(self.storage.sqlite_path)
-        return p if p.is_absolute() else REPO_ROOT / p
+        return self._resolve(self.storage.sqlite_path)
 
     @property
     def instruments_path(self) -> Path:
-        p = Path(self.instruments_dir)
-        return p if p.is_absolute() else REPO_ROOT / p
+        return self._resolve(self.instruments_dir)
+
+    @property
+    def data_path(self) -> Path:
+        return self._resolve(self.data_dir)
+
+    @property
+    def archive_path(self) -> Path:
+        """CSV archive of raw daily bars (append-only backup of what is in Postgres)."""
+        return self.data_path / "archive"
+
+    @property
+    def log_path(self) -> Path:
+        return self._resolve(self.rates_rv.live.log_dir)
+
+    @staticmethod
+    def _resolve(p: str) -> Path:
+        path = Path(p)
+        return path if path.is_absolute() else REPO_ROOT / path
 
 
 def _load_yaml(path: Path) -> dict:
