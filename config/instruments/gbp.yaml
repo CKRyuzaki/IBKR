@@ -1,12 +1,12 @@
 # GBP instrument universe. Equities/index/futures are REAL (subscribed live via ib_async) --
 # symbols/exchanges below are best-effort defaults; verify with ib.qualifyContractsAsync() or
 # TWS contract search and correct if IBKR resolves them differently.
-# Swaps are STUB ONLY (see ibkr_dashboard/swaps/adapter.py).
+# Swaps are STUB ONLY (see ibkr_desk/swaps/adapter.py).
 
 currency: GBP
 
 index:
-  symbol: FTSE
+  symbol: Z  # IBKR's own ticker for the FTSE 100 index on ICEEU -- confirmed via qualifyContractsAsync
   exchange: ICEEU
   display_name: "FTSE 100"
 
@@ -24,11 +24,11 @@ equities:
     primary_exchange: LSE
     display_name: "HSBC"
 
-rate_proxy_futures:
-  - symbol: SONIA
-    exchange: ICEEU
-    display_name: "SONIA Futures"
-    description: "Front-month SONIA futures, proxy for GBP short-rate expectations"
+# SONIA futures: no valid IBKR symbol found via reqMatchingSymbols/reqContractDetails search
+# against this account's paper connection (SONIA, SFI, SFI3, SO3, SONIA3 on ICEEU all came back
+# unknown) -- leaving unset rather than guessing further. Re-check in TWS contract search if
+# this becomes needed.
+rate_proxy_futures: []
 
 swaps:
   - index_basis: SONIA

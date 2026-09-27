@@ -2,12 +2,12 @@
 # symbols/exchanges below are best-effort defaults; verify with ib.qualifyContractsAsync() or
 # TWS contract search and correct if IBKR resolves them differently.
 # No reliable IBKR-tradeable short-rate futures proxy identified for CAD -- left empty; the
-# swap curve panel is STUB ONLY regardless (see ibkr_dashboard/swaps/adapter.py).
+# swap curve panel is STUB ONLY regardless (see ibkr_desk/swaps/adapter.py).
 
 currency: CAD
 
 index:
-  symbol: SPTSX
+  symbol: TSX  # was SPTSX -- confirmed via qualifyContractsAsync; IBKR lists the composite as TSX
   exchange: TSE
   display_name: "S&P/TSX Composite"
 

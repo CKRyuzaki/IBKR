@@ -2,27 +2,27 @@
 # symbols/exchanges below are best-effort defaults; verify with ib.qualifyContractsAsync() or
 # TWS contract search and correct if IBKR resolves them differently.
 # No short-rate futures proxy identified for NOK -- left empty; the swap curve panel is
-# STUB ONLY regardless (see ibkr_dashboard/swaps/adapter.py).
+# STUB ONLY regardless (see ibkr_desk/swaps/adapter.py).
 
 currency: NOK
 
 index:
   symbol: OBX
-  exchange: OSE.NOR
+  exchange: OSE  # was OSE.NOR -- confirmed via qualifyContractsAsync
   display_name: "OBX Index"
 
 equities:
   - symbol: EQNR
     exchange: SMART
-    primary_exchange: OSE.NOR
+    primary_exchange: OSE  # was OSE.NOR
     display_name: "Equinor"
   - symbol: DNB
     exchange: SMART
-    primary_exchange: OSE.NOR
+    primary_exchange: OSE  # was OSE.NOR
     display_name: "DNB Bank"
   - symbol: TEL
     exchange: SMART
-    primary_exchange: OSE.NOR
+    primary_exchange: OSE  # was OSE.NOR
     display_name: "Telenor"
 
 rate_proxy_futures: []

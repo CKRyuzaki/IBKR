@@ -3,8 +3,14 @@
 # TWS contract search and correct if IBKR resolves them differently. NZX-listed names may have
 # limited/no IBKR market data entitlement -- treat this file as the one most likely to need
 # manual correction in Phase E.
+#
+# Checked 2026-09-27 against this account's paper connection: NZ50/NZ50G (NZX, NZE), FPH and ATM
+# (NZX) all came back with zero matches from both qualifyContractsAsync and reqMatchingSymbols --
+# not just a wrong exchange code, IBKR's contract search has nothing under these symbols at all
+# for this account. Needs checking directly in TWS contract search (or a support ticket re: NZX
+# market data entitlement) rather than more symbol guessing.
 # No short-rate futures proxy identified for NZD -- left empty; the swap curve panel is
-# STUB ONLY regardless (see ibkr_dashboard/swaps/adapter.py).
+# STUB ONLY regardless (see ibkr_desk/swaps/adapter.py).
 
 currency: NZD
 

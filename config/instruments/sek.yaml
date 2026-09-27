@@ -2,7 +2,7 @@
 # symbols/exchanges below are best-effort defaults; verify with ib.qualifyContractsAsync() or
 # TWS contract search and correct if IBKR resolves them differently.
 # No short-rate futures proxy identified for SEK -- left empty; the swap curve panel is
-# STUB ONLY regardless (see ibkr_dashboard/swaps/adapter.py).
+# STUB ONLY regardless (see ibkr_desk/swaps/adapter.py).
 
 currency: SEK
 
@@ -12,15 +12,15 @@ index:
   display_name: "OMX Stockholm 30"
 
 equities:
-  - symbol: "ERIC-B"
+  - symbol: "ERIC.B"  # was ERIC-B -- IBKR uses a period, not a hyphen, for the share class
     exchange: SMART
     primary_exchange: SFB
     display_name: "Ericsson B"
-  - symbol: "VOLV-B"
+  - symbol: "VOLV.B"  # was VOLV-B
     exchange: SMART
     primary_exchange: SFB
     display_name: "Volvo B"
-  - symbol: "ATCO-A"
+  - symbol: "ATCO.A"  # was ATCO-A
     exchange: SMART
     primary_exchange: SFB
     display_name: "Atlas Copco A"

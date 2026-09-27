@@ -1,7 +1,7 @@
 # EUR instrument universe. Equities/index/futures are REAL (subscribed live via ib_async) --
 # symbols/exchanges below are best-effort defaults; verify with ib.qualifyContractsAsync() or
 # TWS contract search and correct if IBKR resolves them differently.
-# Swaps (incl. EURIBOR/ESTR basis) are STUB ONLY (see ibkr_dashboard/swaps/adapter.py).
+# Swaps (incl. EURIBOR/ESTR basis) are STUB ONLY (see ibkr_desk/swaps/adapter.py).
 
 currency: EUR
 
@@ -25,7 +25,8 @@ equities:
     display_name: "LVMH"
 
 rate_proxy_futures:
-  - symbol: EURIBOR
+  - symbol: I  # was EURIBOR -- IBKR's ticker for 3M Euribor futures on ICEEU; front-month
+    # expiry is picked automatically at qualify time (ibkr_desk.core.ib.contracts)
     exchange: ICEEU
     display_name: "3M Euribor Futures"
     description: "Front-month Euribor futures, proxy for EUR short-rate expectations"

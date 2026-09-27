@@ -2,13 +2,13 @@
 # symbols/exchanges below are best-effort defaults; verify with ib.qualifyContractsAsync() or
 # TWS contract search and correct if IBKR resolves them differently.
 # No reliable IBKR-tradeable short-rate futures proxy identified for CHF -- left empty; the
-# swap curve panel is STUB ONLY regardless (see ibkr_dashboard/swaps/adapter.py).
+# swap curve panel is STUB ONLY regardless (see ibkr_desk/swaps/adapter.py).
 
 currency: CHF
 
 index:
   symbol: SMI
-  exchange: EBS
+  exchange: EUREX  # was EBS -- confirmed via reqMatchingSymbols the SMI index trades under EUREX
   display_name: "Swiss Market Index"
 
 equities:
@@ -20,7 +20,7 @@ equities:
     exchange: SMART
     primary_exchange: EBS
     display_name: "Novartis"
-  - symbol: ROG
+  - symbol: RO  # was ROG -- IBKR's actual ticker for Roche, confirmed via qualifyContractsAsync
     exchange: SMART
     primary_exchange: EBS
     display_name: "Roche"
