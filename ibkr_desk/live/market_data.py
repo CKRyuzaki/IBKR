@@ -10,19 +10,13 @@ from datetime import datetime, timezone
 
 from ib_async import Contract, Ticker
 
-from ibkr_dashboard.connection.contracts import (
-    CurrencyUniverse,
-    build_contract_for_equity,
-    build_contract_for_future,
-    build_contract_for_index,
-    equity_instrument_id,
-    future_instrument_id,
-    index_instrument_id,
-)
-from ibkr_dashboard.connection.ib_client import IBConnectionManager
-from ibkr_dashboard.data.models import Tick
-from ibkr_dashboard.data.pubsub import Broker
-from ibkr_dashboard.data.storage import Storage
+from ibkr_desk.core.ib.connection import IBConnectionManager
+from ibkr_desk.core.ib.contracts import qualify_async
+from ibkr_desk.core.models import Tick
+from ibkr_desk.core.providers import registry
+from ibkr_desk.core.pubsub import Broker
+from ibkr_desk.storage.sqlite import Storage
+from ibkr_desk.universe import CurrencyUniverse, contracts_for_universe
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +35,8 @@ class MarketDataService:
         self._throttle_seconds = throttle_ms / 1000
         self._last_publish: dict[tuple[str, str], float] = {}
         self._contract_to_instrument_id: dict[int, str] = {}
+        self._wanted: list[tuple[Contract, str]] = []
+        connection.add_on_connected(self._subscribe_all)  # re-subscribe after every reconnect
 
         # ib.pendingTickersEvent fires once per socket read with the set of Tickers that
         # changed -- more broadly documented/stable across ib_insync/ib_async than relying
@@ -48,37 +44,25 @@ class MarketDataService:
         connection.ib.pendingTickersEvent += self._on_pending_tickers
 
     def subscribe_universe(self, universe: CurrencyUniverse) -> None:
-        ccy = universe.currency
-        entries: list[tuple[Contract, str]] = []
-        if universe.index:
-            entries.append(
-                (build_contract_for_index(universe.index, ccy), index_instrument_id(ccy, universe.index.symbol))
-            )
-        for eq in universe.equities:
-            entries.append((build_contract_for_equity(eq, ccy), equity_instrument_id(ccy, eq.symbol)))
-        for fut in universe.rate_proxy_futures:
-            entries.append((build_contract_for_future(fut, ccy), future_instrument_id(ccy, fut.symbol)))
+        """Declare interest; subscriptions are (re)established on every successful IBKR connect."""
+        self._wanted.extend(contracts_for_universe(universe))
 
-        for contract, instrument_id in entries:
-            self._connection.run_coroutine(self._subscribe_one(contract, instrument_id))
+    async def _subscribe_all(self) -> None:
+        self._contract_to_instrument_id.clear()
+        for contract, instrument_id in self._wanted:
+            await self._subscribe_one(contract, instrument_id)
 
     async def _subscribe_one(self, contract: Contract, instrument_id: str) -> None:
-        ib = self._connection.ib
-        try:
-            qualified = await ib.qualifyContractsAsync(contract)
-        except Exception as exc:  # noqa: BLE001 -- log and skip, don't crash the whole universe
-            logger.warning("Could not qualify contract for %s: %s", instrument_id, exc)
-            return
-        if not qualified:
+        resolved = await qualify_async(self._connection.ib, contract)
+        if resolved is None:
             logger.warning(
                 "No qualified contract found for %s (symbol/exchange may need adjustment in "
                 "config/instruments)",
                 instrument_id,
             )
             return
-        resolved = qualified[0]
         self._contract_to_instrument_id[resolved.conId] = instrument_id
-        ib.reqMktData(resolved, "", False, False)
+        self._connection.ib.reqMktData(resolved, "", False, False)
         logger.info("Subscribed market data for %s (conId=%s)", instrument_id, resolved.conId)
 
     def _on_pending_tickers(self, tickers: set[Ticker]) -> None:
@@ -99,5 +83,6 @@ class MarketDataService:
                 tick = Tick(instrument_id=instrument_id, field=field_name, value=float(value), ts=now)
                 all_ticks.append(tick)
                 self._broker.publish(f"tick.{instrument_id}", tick)
+                registry.touch(self._connection.name)
         if all_ticks:
             self._storage.insert_ticks(all_ticks)

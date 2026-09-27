@@ -9,9 +9,9 @@ import logging
 from ib_async import AccountValue as IBAccountValue
 from ib_async import PortfolioItem
 
-from ibkr_dashboard.connection.ib_client import IBConnectionManager
-from ibkr_dashboard.data.models import AccountValue, Position
-from ibkr_dashboard.data.pubsub import Broker
+from ibkr_desk.core.ib.connection import IBConnectionManager
+from ibkr_desk.core.models import AccountValue, Position
+from ibkr_desk.core.pubsub import Broker
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +27,8 @@ class PortfolioFeed:
         connection.ib.accountValueEvent += self._on_account_value
 
     def start(self, account_id: str = "") -> None:
-        self._connection.run_coroutine(self._request_account_updates(account_id))
+        """Stream account/portfolio updates, re-requested after every reconnect."""
+        self._connection.add_on_connected(lambda: self._request_account_updates(account_id))
 
     async def _request_account_updates(self, account_id: str) -> None:
         ib = self._connection.ib
@@ -37,7 +38,7 @@ class PortfolioFeed:
         if not account_id:
             logger.warning("No IBKR account id available yet; portfolio feed not started")
             return
-        ib.reqAccountUpdates(True, account_id)
+        await ib.reqAccountUpdatesAsync(account_id)
         logger.info("Requested live account/portfolio updates for %s", account_id)
 
     def _on_portfolio_update(self, item: PortfolioItem) -> None:
