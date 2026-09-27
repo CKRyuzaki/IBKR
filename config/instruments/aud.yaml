@@ -2,12 +2,12 @@
 # symbols/exchanges below are best-effort defaults; verify with ib.qualifyContractsAsync() or
 # TWS contract search and correct if IBKR resolves them differently.
 # No reliable IBKR-tradeable short-rate futures proxy identified for AUD -- left empty; the
-# swap curve panel is STUB ONLY regardless (see ibkr_dashboard/swaps/adapter.py).
+# swap curve panel is STUB ONLY regardless (see ibkr_desk/swaps/adapter.py).
 
 currency: AUD
 
 index:
-  symbol: AS51
+  symbol: XJO  # was AS51 (Bloomberg ticker, not IBKR's) -- confirmed via qualifyContractsAsync
   exchange: ASX
   display_name: "ASX 200"
 

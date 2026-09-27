@@ -1,7 +1,7 @@
 # USD instrument universe. Equities/index/futures are REAL (subscribed live via ib_async) --
 # symbols/exchanges below are best-effort defaults; verify with ib.qualifyContractsAsync() or
 # TWS contract search and correct if IBKR resolves them differently.
-# Swaps are STUB ONLY (see ibkr_dashboard/swaps/adapter.py) -- no live data yet.
+# Swaps are STUB ONLY (see ibkr_desk/swaps/adapter.py) -- no live data yet.
 
 currency: USD
 
@@ -25,7 +25,7 @@ equities:
     display_name: "NVIDIA"
 
 rate_proxy_futures:
-  - symbol: SR3
+  - symbol: SOFR3  # was SR3 (that's the tradingClass, not the symbol IBKR matches on)
     exchange: CME
     display_name: "SOFR 3M Futures"
     description: "Front-month SOFR futures, proxy for USD short-rate expectations"

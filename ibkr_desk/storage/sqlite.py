@@ -13,7 +13,7 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
-from ibkr_dashboard.data.models import Bar, Instrument, Tick
+from ibkr_desk.core.models import Bar, Instrument, Tick
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS instruments (
@@ -157,12 +157,29 @@ class Storage:
                 ts=_from_epoch_ms(ts),
                 open=o,
                 high=h,
-                low=l,
+                low=lo,
                 close=c,
                 volume=v,
             )
-            for ts, o, h, l, c, v in rows
+            for ts, o, h, lo, c, v in rows
         ]
+
+    def latest_bar(self, instrument_id: str, bar_size: str) -> Bar | None:
+        with self._cursor() as cur:
+            cur.execute(
+                """SELECT ts, open, high, low, close, volume FROM bars
+                   WHERE instrument_id = ? AND bar_size = ?
+                   ORDER BY ts DESC LIMIT 1""",
+                (instrument_id, bar_size),
+            )
+            row = cur.fetchone()
+        if row is None:
+            return None
+        ts, o, h, lo, c, v = row
+        return Bar(
+            instrument_id=instrument_id, bar_size=bar_size, ts=_from_epoch_ms(ts),
+            open=o, high=h, low=lo, close=c, volume=v,
+        )
 
     def close(self) -> None:
         with self._lock:

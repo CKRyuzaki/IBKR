@@ -1,28 +1,30 @@
 """Entrypoint: wires the IBKR connection, storage, pub/sub, websocket bridge and Dash app
 together and runs the process.
 
-Run with: `poetry run dashboard` (see pyproject.toml [project.scripts]) or
-`python -m ibkr_dashboard.app`.
+Run with: `uv run dashboard` (see pyproject.toml [project.scripts]) or
+`python -m ibkr_desk.dashboard.app`.
+
+The dashboard comes up even if IB Gateway is down: the header/STATUS tab show the connection
+state, and market-data subscriptions are (re)established automatically on every (re)connect.
 """
 
 from __future__ import annotations
 
 import logging
 
-from ibkr_dashboard.connection.contracts import (
-    CurrencyUniverse,
-    instruments_for_universe,
-    load_currency_universe,
-)
-from ibkr_dashboard.connection.ib_client import IBConnectionManager
-from ibkr_dashboard.connection.market_data import MarketDataService
-from ibkr_dashboard.connection.portfolio_feed import ACCOUNT_TOPIC, POSITIONS_TOPIC, PortfolioFeed
-from ibkr_dashboard.dash_app.server import build_app
-from ibkr_dashboard.dash_app.ws_server import WebSocketServer
-from ibkr_dashboard.data.backfill import backfill_universe
-from ibkr_dashboard.data.pubsub import broker
-from ibkr_dashboard.data.storage import Storage
-from ibkr_dashboard.settings import load_settings
+from ibkr_desk.core.ib.connection import IBConnectionManager
+from ibkr_desk.core.providers import registry
+from ibkr_desk.core.pubsub import broker
+from ibkr_desk.dashboard.server import build_app
+from ibkr_desk.dashboard.ws_server import WebSocketServer
+from ibkr_desk.live.market_data import MarketDataService
+from ibkr_desk.live.portfolio_feed import ACCOUNT_TOPIC, POSITIONS_TOPIC, PortfolioFeed
+from ibkr_desk.live.quote_book import QuoteBook
+from ibkr_desk.marketdata.backfill import backfill_universe
+from ibkr_desk.settings import load_settings
+from ibkr_desk.storage.postgres import PostgresProbe
+from ibkr_desk.storage.sqlite import Storage
+from ibkr_desk.universe import CurrencyUniverse, instruments_for_universe, load_currency_universe
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -62,8 +64,17 @@ def main() -> None:
 
     storage = Storage(settings.sqlite_path)
 
+    # Live quote book: every instrument is listed from the start, even before its first tick.
+    labels = {
+        inst.instrument_id: (inst.display_name, inst.currency)
+        for u in universes.values() for inst in instruments_for_universe(u)
+    }
+    quote_book = QuoteBook(labels)
+    quote_book.attach(broker)
+
     connection = IBConnectionManager(settings.ibkr)
-    connection.start()
+    registry.register(connection)
+    registry.register(PostgresProbe(settings.postgres))
 
     market_data = MarketDataService(
         connection, broker, storage, throttle_ms=settings.dashboard.update_throttle_ms
@@ -74,10 +85,15 @@ def main() -> None:
         for instrument in instruments_for_universe(instrument_universe):
             storage.upsert_instrument(instrument)
         market_data.subscribe_universe(instrument_universe)
-        connection.run_coroutine(
-            backfill_universe(connection, storage, instrument_universe, settings.storage.bar_backfill_days)
+        connection.add_on_connected(  # bar backfill only needs to run once per process
+            lambda u=instrument_universe: backfill_universe(
+                connection, storage, u, settings.storage.bar_backfill_days, quote_book
+            ),
+            once=True,
         )
     portfolio_feed.start(settings.ibkr.account_id)
+
+    connection.start(required=False)  # UI must come up even when the Gateway is down
 
     topics_by_ccy = {
         ccy: [f"tick.{inst.instrument_id}" for inst in instruments_for_universe(u)]
@@ -86,7 +102,7 @@ def main() -> None:
     ws_server = WebSocketServer(broker, settings.dashboard.host, WS_PORT, _make_topics_for_path(topics_by_ccy))
     ws_server.start()
 
-    app = build_app(universes, storage, settings.dashboard.host, WS_PORT)
+    app = build_app(universes, storage, settings.dashboard.host, WS_PORT, settings, quote_book)
     app.run(host=settings.dashboard.host, port=settings.dashboard.port, debug=False)
 
 
