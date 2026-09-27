@@ -19,6 +19,11 @@ dependencies = [
   "websockets>=12.0,<13.0",
   "psycopg[binary]>=3.2,<4.0",
   "matplotlib>=3.8,<4.0",
+  "quantlib>=1.43",
+  "jupyter>=1.1.1",
+  "ipykernel>=7.3.0",
+  "nbformat>=5.11.1",
+  "nbclient>=0.11.0",
 ]
 
 [dependency-groups]
