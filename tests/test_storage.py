@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 
-from ibkr_dashboard.data.models import AssetClass, Bar, Instrument, Tick
-from ibkr_dashboard.data.storage import Storage
+from ibkr_desk.core.models import AssetClass, Bar, Instrument, Tick
+from ibkr_desk.storage.sqlite import Storage
 
 
 def test_insert_and_query_ticks(tmp_path):

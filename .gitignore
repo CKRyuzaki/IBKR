@@ -23,3 +23,9 @@ data/*.db-shm
 
 # Logs
 *.log
+
+# Archive + runtime output (data lives in Postgres; CSVs are a local backup)
+data/archive/
+logs/
+KILL
+equity.png
