@@ -10,11 +10,11 @@ from __future__ import annotations
 from dash import dcc, html
 from dash_extensions import WebSocket
 
-from ibkr_dashboard.connection.contracts import CurrencyUniverse, equity_instrument_id, index_instrument_id
-from ibkr_dashboard.dash_app.components.price_chart import build_initial_figure
-from ibkr_dashboard.dash_app.components.quote_ticker import build_quote_ticker
-from ibkr_dashboard.dash_app.components.swap_curve_panel import build_swap_curve_panel
-from ibkr_dashboard.swaps.models import RatesSwapInstrument
+from ibkr_desk.universe import CurrencyUniverse, equity_instrument_id, index_instrument_id
+from ibkr_desk.dashboard.components.price_chart import build_initial_figure
+from ibkr_desk.dashboard.components.quote_ticker import build_quote_ticker
+from ibkr_desk.dashboard.components.swap_curve_panel import build_swap_curve_panel
+from ibkr_desk.swaps.models import RatesSwapInstrument
 
 
 def build_currency_layout(universe: CurrencyUniverse, ws_url: str) -> html.Div:

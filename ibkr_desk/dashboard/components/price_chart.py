@@ -13,6 +13,8 @@ from datetime import datetime
 import plotly.graph_objects as go
 from dash import Patch
 
+from ibkr_desk.dashboard import theme  # noqa: F401  (registers the "bloomberg" plotly template)
+
 RANGE_BUTTONS = [
     {"count": 1, "label": "1D", "step": "day", "stepmode": "backward"},
     {"count": 5, "label": "5D", "step": "day", "stepmode": "backward"},
@@ -25,7 +27,7 @@ RANGE_BUTTONS = [
 
 def build_initial_figure(title: str, x: list[datetime], y: list[float]) -> go.Figure:
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=list(x), y=list(y), mode="lines", name=title, line={"width": 1.5}))
+    fig.add_trace(go.Scatter(x=list(x), y=list(y), mode="lines", name=title, line={"width": 1.5, "color": "#FFA028"}))
     fig.update_layout(
         title=title,
         margin={"l": 40, "r": 20, "t": 40, "b": 20},
@@ -39,7 +41,6 @@ def build_initial_figure(title: str, x: list[datetime], y: list[float]) -> go.Fi
         },
         yaxis={"showspikes": True, "spikemode": "across"},
         uirevision=title,
-        template="plotly_dark",
     )
     return fig
 

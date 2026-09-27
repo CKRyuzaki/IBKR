@@ -6,7 +6,7 @@ from __future__ import annotations
 from dash import dcc, html
 from dash_extensions import WebSocket
 
-from ibkr_dashboard.dash_app.components.positions_table import build_account_summary_cards, build_positions_table
+from ibkr_desk.dashboard.components.positions_table import build_account_summary_cards, build_positions_table
 
 
 def build_portfolio_layout(ws_url: str) -> html.Div:

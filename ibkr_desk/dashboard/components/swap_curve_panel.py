@@ -1,11 +1,11 @@
 """Swap/IRS curve panel -- always visibly labeled as a placeholder until a real adapter is
-wired in (see ibkr_dashboard/swaps/adapter.py)."""
+wired in (see ibkr_desk/swaps/adapter.py)."""
 
 from __future__ import annotations
 
 from dash import dash_table, html
 
-from ibkr_dashboard.swaps.models import RatesSwapInstrument
+from ibkr_desk.swaps.models import RatesSwapInstrument
 
 
 def build_swap_curve_panel(currency: str, swaps: list[RatesSwapInstrument]) -> html.Div:
@@ -30,7 +30,7 @@ def build_swap_curve_panel(currency: str, swaps: list[RatesSwapInstrument]) -> h
         [
             html.Div(
                 "Swap/IRS data is not wired to a live source yet -- placeholder rows only. "
-                "See ibkr_dashboard/swaps/adapter.py.",
+                "See ibkr_desk/swaps/adapter.py.",
                 className="swap-stub-banner",
             ),
             dash_table.DataTable(

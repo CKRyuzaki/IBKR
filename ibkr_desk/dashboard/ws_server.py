@@ -21,7 +21,7 @@ from datetime import datetime
 import websockets
 from websockets.exceptions import ConnectionClosed
 
-from ibkr_dashboard.data.pubsub import Broker
+from ibkr_desk.core.pubsub import Broker
 
 logger = logging.getLogger(__name__)
 

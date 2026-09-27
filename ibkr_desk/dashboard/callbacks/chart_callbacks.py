@@ -13,9 +13,9 @@ from datetime import datetime, timedelta, timezone
 from dash import MATCH, Dash, Input, Output, State, no_update
 from dash.exceptions import PreventUpdate
 
-from ibkr_dashboard.dash_app.components.price_chart import append_point_patch, build_initial_figure
-from ibkr_dashboard.dash_app.components.quote_ticker import build_quote_ticker_children
-from ibkr_dashboard.data.storage import Storage
+from ibkr_desk.dashboard.components.price_chart import append_point_patch, build_initial_figure
+from ibkr_desk.dashboard.components.quote_ticker import build_quote_ticker_children
+from ibkr_desk.storage.sqlite import Storage
 
 logger = logging.getLogger(__name__)
 

@@ -10,7 +10,7 @@ import logging
 from dash import Dash, Input, Output, State
 from dash.exceptions import PreventUpdate
 
-from ibkr_dashboard.dash_app.components.positions_table import build_account_summary_cards
+from ibkr_desk.dashboard.components.positions_table import build_account_summary_cards
 
 logger = logging.getLogger(__name__)
 
