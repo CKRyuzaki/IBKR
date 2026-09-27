@@ -1,151 +1,151 @@
-# IBKR G10 RV Desk Dashboard — Architecture
+# IBKR Desk — Architecture
 
-## What this is
-
-A live-ticking market data and portfolio dashboard for a G10 rates/equity relative-value desk,
-built on Interactive Brokers. It connects to IB Gateway/TWS (**paper trading by default**),
-streams live quotes for the most liquid equity index + single names per G10 currency (USD, EUR,
-GBP, JPY, CHF, CAD, AUD, NZD, SEK, NOK), shows Bloomberg-GP-style price charts (pan/zoom/
-crosshair, adjustable lookback), and monitors the account's live positions/P&L. Swap/IRS curves
-(e.g. EURIBOR, ESTR, basis swaps) are scaffolded as a clearly-labeled **placeholder** — see
-[Known limitation](#known-limitation-swapirs-data) below.
-
-It deliberately runs as **one Python process** (no microservices, no message broker, no
-Docker/k8s) — this is a single-user local tool, so that complexity would add operational weight
-without benefit.
-
-## Process layout: three pieces of concurrency, one process
+One package, `ibkr_desk`, serving three products that all talk to Interactive Brokers (paper by
+default): a read-only **dashboard**, a **market-data archive** (Postgres), and a **rates RV
+strategy** (backtest + paper trader). Everything that touches the IBKR API lives once, in
+`ibkr_desk/core/ib/`, so the three products share the same connection, contract, history and
+execution code.
 
 ```
-                         ┌─────────────────────────────────────────┐
-                         │              Python process              │
-                         │                                           │
-  IB Gateway/TWS  <────► │  IBKR I/O thread                          │
-  (paper, port 4002)     │  - owns the single ib_async.IB() conn.    │
-                         │  - own asyncio event loop                 │
-                         │  - reqMktData / reqHistoricalData /       │
-                         │    reqAccountUpdates                      │
-                         │        │                                  │
-                         │        │ publish()                        │
-                         │        ▼                                  │
-                         │  Broker (in-memory pub/sub)                │
-                         │  topic -> subscriber queues                │
-                         │        │              │                   │
-                         │        │              ▼                   │
-                         │        │      SQLite (data/market_data.db)│
-                         │        │      (ticks + backfilled bars)   │
-                         │        ▼                                  │
-                         │  WebSocket bridge thread                  │
-                         │  (its own asyncio loop, port 8501)        │
-                         │        │                                  │
-                         │        ▼ ws frames                        │
-                         │  Dash/Flask server thread (main thread)   │
-                         │  - serves the dashboard, port 8500        │
-                         │  - dash-extensions WebSocket component     │
-                         │    receives frames -> Dash callback fires  │
-                         │  - callback returns dash.Patch() -> only   │
-                         │    the changed trace/value updates,        │
-                         │    zoom/pan/crosshair state is preserved   │
-                         └─────────────────────────────────────────┘
-                                        ▲
-                                        │ HTTP/WS
-                                  Your browser
-                          http://127.0.0.1:8500
+ibkr_desk/
+  core/            depends on nothing else in the package
+    config.py        IBKRConfig, PostgresConfig, FutureSpec, ClientRole
+    ib/connection.py connect_async / connect_sync / IBConnectionManager
+    ib/contracts.py  stock / index / future factories, qualify
+    ib/history.py    HistoryClient (paced reqHistoricalData), bars_to_frame
+    ib/execution.py  positions, daily_pnl, marketable_limit
+    providers.py     ProviderStatus + registry (connection status, provider-agnostic)
+    pubsub.py        Broker: topic pub/sub + synchronous taps
+    models.py, time_utils.py
+  storage/         sqlite.py | postgres.py | csv_archive.py
+  marketdata/      futures.py | equities.py | public_rates.py | backfill.py | jobs.py
+  live/            market_data.py | portfolio_feed.py | quote_book.py
+  strategies/rates_rv/   config | signals | data | backtest | risk | trader
+  dashboard/       app | server | ws_server | theme | data_access | pages/ | callbacks/ | components/
+  universe.py, swaps/, settings.py (composition root)
 ```
+Dependency direction: `core` <- `storage`, `marketdata`, `live`, `strategies` <- `dashboard`.
+`settings.py` assembles every sub-config (each lives next to the code that uses it).
 
-Why three threads and not more/fewer:
-- **Exactly one IBKR connection** — the API isn't safe to share across threads/loops, so all
-  IBKR I/O (market data, historical backfill, account/portfolio updates) happens on one
-  dedicated thread/event loop (`ibkr_dashboard/connection/ib_client.py`).
-- **A separate websocket bridge thread** (`ibkr_dashboard/dash_app/ws_server.py`) — decouples
-  "how a tick reaches the browser" from "how a tick reaches IBKR," so the Dash server and the
-  IBKR connection never block on each other.
-- **The Dash/Flask server on the main thread** — this is what you interact with in the browser.
+## One place to connect
 
-## Why not Streamlit / why Dash + Patch() + WebSocket
+`core/ib/connection.py` is the only code that opens an IBKR socket. Every client goes through
+`connect_async(ib, cfg, role)`, which guarantees:
 
-Streamlit reruns the entire script top-to-bottom on every update, which doesn't scale to
-sub-second ticking data. Instead:
-- `dash-extensions`' `WebSocket` component pushes each new tick from the server the moment it
-  arrives (event-driven), instead of the browser polling on an interval.
-- The Dash callback that receives a tick returns a `dash.Patch()` object, which patches only the
-  one changed trace/value in the existing figure — never rebuilds the whole chart — which is
-  what keeps your zoom/pan/crosshair state intact while data streams in.
-- `dcc.Interval` is not used for ticks at all; it's reserved for low-frequency housekeeping
-  (not currently wired to anything, but the pattern is there if needed later, e.g. a
-  "connection alive" heartbeat).
-- Switching the **instrument** or the chart's lookback range is a deliberate full redraw
-  (queries SQLite directly) — that's correct there because *you* changed the view, so a fresh
-  figure with `uirevision` reset is appropriate, unlike a background tick arriving passively.
+- **Paper guard**: after connecting, if any managed account is not `DU…` and `ibkr.allow_live` is
+  false, it disconnects and raises `LiveAccountRefused` (not retried: it is a config problem).
+- **Distinct client id per role**: `ClientRole` (DASHBOARD 0, TRADER 1, ARCHIVE 2, RESEARCH 3, ADHOC 4)
+  is added to `ibkr.client_id`, so simultaneous clients on one Gateway can never collide.
+- **Least privilege**: every role connects read-only except `TRADER`.
+- The configured market-data type.
 
-## Component map
+Two entry points share that code path: `connect_sync()` for short-lived scripts and jobs (archive,
+trader), and `IBConnectionManager` for long-running apps (dashboard).
 
-| File | Responsibility |
+### IBConnectionManager (long-running apps)
+Owns the single `ib_async.IB()` on its own asyncio loop in a dedicated thread (an IBKR connection is
+not safe to share across threads/loops). Everything else schedules coroutines onto that loop via
+`run_coroutine()`. It:
+- retries forever and reconnects after a drop;
+- runs **on-connect hooks** after every successful (re)connect. Subscriptions and account streams
+  die with the socket, so `MarketDataService`, `PortfolioFeed` and the backfill register hooks
+  rather than firing once at startup;
+- reports its state through `status()` (see Providers below);
+- `start(required=False)` lets the dashboard come up even when Gateway is down.
+
+## Providers and connection status
+
+`core/providers.py` defines `ProviderStatus` (state, endpoint, time in state, last-data age, extras,
+`kind`) and a `ProviderRegistry`. A provider is any object with a `name` and `status()`. Registered
+today: `IBConnectionManager` (IBKR) and `PostgresProbe`. The header chips and the STATUS tab render
+whatever is registered, so wiring in another market-data source is one `registry.register(...)`.
+`registry.touch(name)` records that data arrived, which lets the UI distinguish "connected" from
+"connected but silent".
+
+## Historical data
+
+All `reqHistoricalData` calls go through `HistoryClient`, which spaces requests (default 1.5 s;
+`ibkr.historical_request_interval_s`) with a lock, so concurrent callers queue instead of tripping
+IBKR's pacing limits. The dashboard backfill, the futures archive and the equities archive all use it.
+
+## Storage
+
+- **SQLite** (`data/market_data.db`): the dashboard's tick/bar cache. Frequent small writes + range reads.
+- **Postgres** (`marketdata`): long-term archive, one schema per asset class.
+
+| Schema | Tables |
 |---|---|
-| `ibkr_dashboard/settings.py` | Loads `config/config.yaml` (or falls back to `config.example.yaml`) + `.env`, typed via pydantic. Single `mode: paper\|live` toggle picks the connection port. |
-| `ibkr_dashboard/connection/ib_client.py` | `IBConnectionManager` — the one asyncio loop/thread owning `ib_async.IB()`, with connect-retry and auto-reconnect on disconnect. |
-| `ibkr_dashboard/connection/contracts.py` | Loads a currency's `config/instruments/<ccy>.yaml`, builds real `ib_async` `Contract` objects (`Stock`, `Index`, `Future`) for equities/indices/futures. Swaps never become a `Contract` here. |
-| `ibkr_dashboard/connection/market_data.py` | `MarketDataService` — qualifies contracts, calls `reqMktData`, listens to `ib.pendingTickersEvent`, throttles + normalizes ticks, publishes to the `Broker` and writes to SQLite. |
-| `ibkr_dashboard/connection/portfolio_feed.py` | `PortfolioFeed` — wraps `reqAccountUpdates`, republishes `Position`/`AccountValue` snapshots to the `Broker` for the Portfolio tab. |
-| `ibkr_dashboard/swaps/models.py` + `adapter.py` | `RatesSwapInstrument` data shape + `SwapMarketDataAdapter` protocol. Only implementation today is `StubSwapAdapter`, which always returns no data. This is the single slot-in point for real swap data later. |
-| `ibkr_dashboard/data/models.py` | Shared dataclasses: `Tick`, `Bar`, `Position`, `AccountValue`, `Instrument`. |
-| `ibkr_dashboard/data/pubsub.py` | `Broker` — thread-safe in-memory pub/sub. Supports both plain thread `queue.Queue` subscribers and asyncio-native subscribers (used by the websocket bridge). Drops the oldest message on a full queue rather than ever blocking the IBKR I/O thread. |
-| `ibkr_dashboard/data/storage.py` | SQLite schema (`ticks`, `bars`, `instruments`) + read/write API. Chosen over DuckDB because this workload is frequent small writes + simple range-scan reads, which is SQLite's strength. |
-| `ibkr_dashboard/data/backfill.py` | At startup, calls `reqHistoricalData` per instrument to pre-populate `bars` so GP-style longer lookbacks have data immediately. |
-| `ibkr_dashboard/dash_app/ws_server.py` | `WebSocketServer` — its own thread/loop, bridges `Broker` topics to browser websocket connections (one topic set per currency tab, one for the portfolio tab). |
-| `ibkr_dashboard/dash_app/server.py` | `build_app()` — Dash app factory: tab layout (10 currencies + Portfolio) + registers callbacks. |
-| `ibkr_dashboard/dash_app/pages/currency_page.py` | Builds one GP-style currency page: quote header, instrument dropdown, price chart, swap panel. Reused for all 10 currencies via pattern-matching (`MATCH`) component ids. |
-| `ibkr_dashboard/dash_app/pages/portfolio_page.py` | Positions table + account summary cards. |
-| `ibkr_dashboard/dash_app/components/*.py` | Pure render functions for the price chart, quote ticker, swap panel, positions table — reused by both the initial page layout and the live-update callbacks. |
-| `ibkr_dashboard/dash_app/callbacks/chart_callbacks.py` | Websocket message → `Patch()` chart/quote update; dropdown change → full SQLite requery + fresh figure. |
-| `ibkr_dashboard/dash_app/callbacks/portfolio_callbacks.py` | Websocket message → positions table rows + account summary cards. |
-| `ibkr_dashboard/app.py` | Entrypoint (`uv run dashboard` / `python -m ibkr_dashboard.app`) — wires all of the above together and starts everything. |
+| `futures` | `contract`, `daily_bar` (OHLCV per contract per day) |
+| `equities` | `daily_bar` (OHLCV + adjusted close) |
+| `rates` | `treasury_par_yield`, `overnight_rate` (SOFR, EFFR), `fred_series` (breakevens, TIPS real yields, credit OAS, VIX) |
+| `ops` | `snapshot_run` (one row per snapshot step: ok/fail + detail) |
 
-## End-to-end data flow (one tick)
+- **CSV archive** (`data/archive/`): append-only local backup. Rows are never deleted; on overlapping
+  dates the newer fetch wins. Postgres is loaded from it by idempotent upsert.
 
-1. IB Gateway sends a bid/ask/last update over the socket → `ib_async` fires
-   `ib.pendingTickersEvent` on the IBKR I/O thread.
-2. `MarketDataService._on_pending_tickers` (`connection/market_data.py`) normalizes it into a
-   `Tick`, throttles per-instrument-per-field (`dashboard.update_throttle_ms`, default 250ms),
-   writes it to SQLite, and calls `Broker.publish("tick.<instrument_id>", tick)`.
-3. `Broker.publish` (`data/pubsub.py`) hands the tick to any subscriber of that topic — both
-   plain-thread subscribers and, via `loop.call_soon_threadsafe`, any asyncio subscribers.
-4. The `WebSocketServer` (`dash_app/ws_server.py`) holds one asyncio subscription per open
-   browser connection for the topics relevant to that currency tab, and forwards the tick as a
-   JSON websocket frame.
-5. The browser's `dash-extensions` `WebSocket` component receives the frame, which fires the
-   Dash callback in `chart_callbacks.py`.
-6. That callback updates the quote-cache `dcc.Store`, rebuilds the small quote-ticker header,
-   and — only if the tick's instrument is the one currently selected in the dropdown — returns
-   a `Patch()` that appends one point to the chart trace.
+## Daily snapshot (`marketdata/jobs.py`)
+
+1. IBKR: refresh futures and equities CSVs (one connection, `ClientRole.ARCHIVE`).
+2. CSVs -> Postgres.
+3. Public rates (US Treasury par curve, NY Fed SOFR/EFFR) -> Postgres.
+4. FRED series (`marketdata/fred.py`: breakevens, TIPS real yields, IG/HY credit OAS, VIX) -> Postgres.
+   Uses FRED's anonymous CSV download, no API key; add a row to `fred.SERIES` to archive another
+   series. Two of the credit-OAS series only return their trailing ~3 years via this endpoint
+   (a FRED licensing restriction on ICE-sourced data, not a bug) -- see the comment in that file.
+
+Each step is isolated and recorded in `ops.snapshot_run`. A step that returns less than requested
+(a product with no contracts, a symbol IBKR rejects) is recorded as a **failure**, not a silent
+success. The process exits non-zero if anything failed. Scheduled by Windows Task Scheduler.
+
+## Rates RV strategy (`strategies/rates_rv/`)
+
+DV01-neutral butterflies on Treasury futures (2s5s10s, 5s10s30s). `signals.py` builds the fly
+level, z-score, position state machine and vol-targeted sizing; `backtest.py` adds an execution lag,
+commission + slippage, and a walk-forward parameter search; `risk.py` enforces per-leg/DV01 caps, a
+daily-loss flatten and a `KILL` file; `trader.py` refreshes the archive, computes targets, diffs
+against positions and sends marketable-limit orders (only with `--send`, as `ClientRole.TRADER`).
+Price changes are always taken within the contract held the previous day, so roll gaps never enter P&L.
+The port from the original standalone bot is locked by a regression test on the synthetic backtest.
+
+## Dashboard
+
+One process, three pieces of concurrency: the IBKR I/O thread, a websocket bridge thread
+(`ws_server.py`, port 8051) and the Dash/Flask server on the main thread (port 8500).
+
+```
+IB Gateway <--> IBKR I/O thread --publish--> Broker --+--> SQLite (ticks, bars)
+                                                       +--> QuoteBook (tap)      --> LIVE tab (500 ms refresh)
+                                                       +--> WebSocket bridge     --> CHARTS / PORTFOLIO tabs (Patch())
+Postgres <-- data_access.py (read-only) ------------------------------------------> DATA tab
+provider registry ----------------------------------------------------------------> header chips + STATUS tab
+```
+
+| Tab | Source | Mechanism |
+|---|---|---|
+| LIVE | `QuoteBook` (fed by a broker tap) | 500 ms interval; the blotter reads server-side state instead of pushing every tick through the browser, which stays responsive with dozens of instruments and cannot back-pressure ingestion |
+| CHARTS | SQLite bars + websocket ticks | `dash.Patch()` appends a point so zoom/pan/crosshair survive live updates; switching instrument is a deliberate full redraw |
+| PORTFOLIO | `PortfolioFeed` via websocket | positions + account cards |
+| DATA | Postgres | freshness per dataset (business-day lag -> OK/WARN/STALE), `ops.snapshot_run` log, explorer (plot **and** table) driven by a dataset registry in `data_access.py` |
+| STATUS | provider registry | one card per provider; same data as the header chips |
+
+The dashboard is **read-only**: it never places orders. The look (black, amber labels, green/red,
+monospace) is defined once in `dashboard/theme.py` (plotly template + DataTable styles) and
+`assets/style.css`.
 
 ## Config & credentials
 
-- `config/config.example.yaml` is committed; `config/config.yaml` is your real local copy
-  (gitignored). Single `ibkr.mode: paper|live` toggle picks `paper_port` (4002) vs `live_port`
-  (4001).
-- IBKR's TWS API has **no API key/secret** — you authenticate by logging into TWS/IB Gateway
-  itself. `.env` is only for optional cosmetic overrides (e.g. an account label).
-- `config/instruments/<ccy>.yaml` — one file per G10 currency, editable without touching code.
-  Marks each row as real (equities/index/futures, subscribed live) or a swap stub.
+`config/config.yaml` (gitignored, copy of `config.example.yaml`) — typed by pydantic in `settings.py`.
+Secrets (Postgres password) live in `.env`. IBKR has no API key: you authenticate by logging into
+Gateway. `ibkr.mode` picks paper/live port; `ibkr.allow_live` must be set deliberately to talk to a
+non-paper account.
 
-## Known limitation: swap/IRS data
+## Known limitations
 
-IBKR's public TWS API docs don't describe a contract spec for OTC interest-rate-swap quotes via
-`reqMktData` — likely an institutional-only entitlement, possibly requiring FIX CTCI rather than
-the standard socket API this project uses. `ibkr_dashboard/swaps/adapter.py` documents this and
-provides `StubSwapAdapter` as the only implementation. Once the real IBKR contract spec is
-confirmed, only that one adapter needs to be replaced (single line in `app.py`) — nothing else
-in the pipeline changes.
-
-## Build phases (for reference)
-
-The project was built in this order, each independently verifiable:
-
-1. **Connection** — `settings.py`, `ib_client.py`, `scripts/smoke_test_connection.py`.
-2. **Storage** — `data/models.py`, `storage.py`, `backfill.py`.
-3. **Dash skeleton** — one currency (USD) wired end-to-end: tick subscription → pubsub →
-   websocket → chart/quote update.
-4. **Portfolio tab** — `portfolio_feed.py`, positions table, account summary.
-5. **Remaining 9 G10 currencies** — instrument YAMLs populated, same page code reused.
-6. **Swap stub wiring** — placeholder panel added to all 10 currency pages.
+- **Swap/IRS data**: IBKR's public TWS API has no documented contract spec for OTC swap quotes.
+  `swaps/adapter.py` provides `StubSwapAdapter` as the only implementation and is the single slot-in
+  point for a real feed.
+- **Expired futures**: IBKR serves roughly one year of expired contracts, so deep futures history
+  must come from elsewhere; the archive accumulates from now on.
+- **DV01s** in `config` are approximations.
+- Some instruments in `config/instruments/*.yaml` do not resolve on IBKR (check logs for
+  "No security definition"); they show as empty rows on the LIVE tab.
